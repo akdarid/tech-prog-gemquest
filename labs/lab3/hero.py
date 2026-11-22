@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .items import Item, MageKitFactory, RangerKitFactory, WarriorKitFactory, create_catalog
+from .defense import ArmorHandler, BarrierHandler, EvasionHandler
 
 
 HERO_CLASSES = {
@@ -21,7 +22,7 @@ class Hero:
         self.armor = kit.create_armor()
         self.inventory: list[Item] = []
         self.achievements: list[str] = []
-        self.health = self.max_health
+        self.rest()
 
     @property
     def max_health(self) -> int:
@@ -34,13 +35,24 @@ class Hero:
         return self.weapon.roll_damage() + (self.level - 1) * 3
 
     def receive_hit(self, amount: int) -> int:
-        damage = max(1, int(amount * (1 - self.armor.defense) + 0.5)) if amount > 0 else 0
+        damage = self._defense.handle(amount)
         taken = min(self.health, damage)
         self.health -= taken
         return taken
 
     def rest(self) -> None:
         self.health = self.max_health
+        armor = ArmorHandler(self.armor.defense)
+        self._defense = armor
+        if self.hero_class == "ranger" or (self.hero_class == "mage" and self.level >= 3):
+            self._defense = EvasionHandler(0.15 if self.hero_class == "ranger" else 0.10)
+            self._defense.set_next(armor)
+        if self.hero_class == "mage":
+            armor.set_next(BarrierHandler(30))
+        elif self.hero_class == "warrior" and self.level >= 3:
+            armor.set_next(BarrierHandler(20))
+        elif self.hero_class == "ranger" and self.level >= 5:
+            armor.set_next(BarrierHandler(15))
 
     def gain_experience(self, amount: int) -> None:
         self.experience += amount

@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from .dice import Dice
+from .defense import ArmorHandler
 
 
 class Enemy(ABC):
@@ -43,7 +44,7 @@ class BasicEnemy(Enemy):
         return Dice().roll(max(1, self.damage - 2), self.damage + 2)
 
     def receive_hit(self, amount: int) -> int:
-        damage = max(1, int(amount * (1 - self.defense) + 0.5)) if amount > 0 else 0
+        damage = ArmorHandler(self.defense).handle(amount)
         taken = min(self._health, damage)
         self._health -= taken
         return taken
@@ -62,3 +63,73 @@ class Skeleton(BasicEnemy):
 class Dragon(BasicEnemy):
     def __init__(self):
         super().__init__("Дракон изумрудной жилы", 170, 24, 0.25)
+
+
+class EnemyDecorator(Enemy):
+    def __init__(self, wrapped: Enemy):
+        self.wrapped = wrapped
+
+    @property
+    def name(self) -> str:
+        return self.wrapped.name
+
+    @property
+    def health(self) -> int:
+        return self.wrapped.health
+
+    def roll_damage(self) -> int:
+        return self.wrapped.roll_damage()
+
+    def receive_hit(self, amount: int) -> int:
+        return self.wrapped.receive_hit(amount)
+
+
+class LegendaryEnemy(EnemyDecorator):
+    @property
+    def name(self) -> str:
+        return "Легендарный " + self.wrapped.name
+
+    def roll_damage(self) -> int:
+        return int(self.wrapped.roll_damage() * 1.5)
+
+
+class ArmoredEnemy(EnemyDecorator):
+    @property
+    def name(self) -> str:
+        return "Бронированный " + self.wrapped.name
+
+    def receive_hit(self, amount: int) -> int:
+        return self.wrapped.receive_hit(ArmorHandler(0.20).handle(amount))
+
+
+class WindfuryEnemy(EnemyDecorator):
+    @property
+    def name(self) -> str:
+        return "Стремительный " + self.wrapped.name
+
+    def roll_damage(self) -> int:
+        first = self.wrapped.roll_damage()
+        return first + self.wrapped.roll_damage() if Dice().chance(0.25) else first
+
+
+class HauntedWeapon(Enemy):
+    # У оружия нет здоровья и receive_hit: адаптер добавляет контракт противника.
+    def __init__(self, weapon):
+        self.weapon = weapon
+        self._health = 70
+
+    @property
+    def name(self) -> str:
+        return "Одержимый " + self.weapon.name
+
+    @property
+    def health(self) -> int:
+        return self._health
+
+    def roll_damage(self) -> int:
+        return self.weapon.roll_damage()
+
+    def receive_hit(self, amount: int) -> int:
+        taken = min(self._health, max(0, amount))
+        self._health -= taken
+        return taken

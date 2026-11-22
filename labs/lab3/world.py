@@ -3,7 +3,9 @@ from dataclasses import dataclass
 
 from .battle import BattleReport, fight
 from .dice import Dice
-from .enemies import Dragon, Enemy, Goblin, Skeleton
+from .enemies import (ArmoredEnemy, Dragon, Enemy, Goblin, HauntedWeapon,
+                      LegendaryEnemy, Skeleton, WindfuryEnemy)
+from .items import create_catalog
 
 
 @dataclass
@@ -25,12 +27,16 @@ class Location(ABC):
     @abstractmethod
     def create_enemy(self) -> Enemy: ...
 
-    def explore(self, hero, catalog, seed: int) -> ExpeditionReport:
+    def explore(self, hero, catalog, seed: int, tactic=None, elite=False) -> ExpeditionReport:
         Dice().reseed(seed)
         hero.rest()
         enemy = self.create_enemy()
+        if elite:
+            for decorator in (LegendaryEnemy, ArmoredEnemy, WindfuryEnemy):
+                if Dice().chance(0.25):
+                    enemy = decorator(enemy)
         enemy_name = enemy.name
-        result = fight(hero, enemy)
+        result = fight(hero, enemy, tactic)
         loot_name = ""
         gold = self.gold if result.won else -min(hero.gold, 10)
         hero.gold += gold
@@ -69,5 +75,14 @@ class DragonLair(Location):
         return Dragon()
 
 
+class HauntedManor(Location):
+    name = "Заброшенная мастерская"
+    gold, experience = 50, 100
+    loot_codes = ("moonstone", "sapphire")
+
+    def create_enemy(self) -> Enemy:
+        return HauntedWeapon(create_catalog().create("sword"))
+
+
 def locations():
-    return {"forest": Forest(), "crypt": Crypt(), "dragon": DragonLair()}
+    return {"forest": Forest(), "crypt": Crypt(), "manor": HauntedManor(), "dragon": DragonLair()}
